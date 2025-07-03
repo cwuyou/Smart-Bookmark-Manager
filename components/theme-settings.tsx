@@ -7,16 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "../lib/theme-context"
+import { useLanguage } from "@/lib/i18n/language-context"
 
 export function ThemeSettings() {
   const { theme, updateTheme, resetTheme } = useTheme()
+  const { t } = useLanguage()
 
   return (
     <div className="space-y-6">
       {/* Theme Mode */}
       <Card>
         <CardHeader>
-          <CardTitle>主题模式</CardTitle>
+          <CardTitle>{t('theme.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
@@ -27,7 +29,7 @@ export function ThemeSettings() {
               className="flex-1"
             >
               <Sun className="w-4 h-4 mr-2" />
-              浅色
+              {t('theme.light')}
             </Button>
             <Button
               variant={theme.mode === "dark" ? "default" : "outline"}
@@ -36,7 +38,7 @@ export function ThemeSettings() {
               className="flex-1"
             >
               <Moon className="w-4 h-4 mr-2" />
-              深色
+              {t('theme.dark')}
             </Button>
           </div>
         </CardContent>
@@ -45,11 +47,11 @@ export function ThemeSettings() {
       {/* Typography */}
       <Card>
         <CardHeader>
-          <CardTitle>字体设置</CardTitle>
+          <CardTitle>{t('theme.typography.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div>
-            <Label>字体大小</Label>
+            <Label>{t('theme.typography.fontSize')}</Label>
             <Select
               value={theme.fontSize}
               onValueChange={(value: "small" | "medium" | "large") => updateTheme({ fontSize: value })}
@@ -58,9 +60,9 @@ export function ThemeSettings() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="small">小 (14px)</SelectItem>
-                <SelectItem value="medium">中 (16px)</SelectItem>
-                <SelectItem value="large">大 (18px)</SelectItem>
+                <SelectItem value="small">{t('theme.typography.small')}</SelectItem>
+                <SelectItem value="medium">{t('theme.typography.medium')}</SelectItem>
+                <SelectItem value="large">{t('theme.typography.large')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -70,7 +72,7 @@ export function ThemeSettings() {
       {/* Reset */}
       <Button variant="outline" onClick={resetTheme} className="w-full">
         <RotateCcw className="w-4 h-4 mr-2" />
-        重置为默认主题
+        {t('theme.reset')}
       </Button>
     </div>
   )

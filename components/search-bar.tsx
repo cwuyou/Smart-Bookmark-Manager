@@ -6,14 +6,16 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import type { Bookmark, Group } from "../app/page"
+import { useLanguage } from "@/lib/i18n/language-context"
 
 interface SearchBarProps {
   groups: Group[]
   standaloneBookmarks: Bookmark[]
-  onBookmarkClick: (bookmark: Bookmark) => void
+  onBookmarkClick?: (bookmark: Bookmark) => void
 }
 
 export function SearchBar({ groups, standaloneBookmarks, onBookmarkClick }: SearchBarProps) {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearchFocused, setIsSearchFocused] = useState(false)
 
@@ -43,7 +45,7 @@ export function SearchBar({ groups, standaloneBookmarks, onBookmarkClick }: Sear
   }, [searchQuery, groups, standaloneBookmarks])
 
   const handleBookmarkClick = (bookmark: Bookmark) => {
-    onBookmarkClick(bookmark)
+    onBookmarkClick?.(bookmark)
     setSearchQuery("")
     setIsSearchFocused(false)
   }
@@ -58,7 +60,7 @@ export function SearchBar({ groups, standaloneBookmarks, onBookmarkClick }: Sear
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
-          placeholder="搜索书签..."
+          placeholder={t('search.placeholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={() => setIsSearchFocused(true)}
@@ -107,7 +109,7 @@ export function SearchBar({ groups, standaloneBookmarks, onBookmarkClick }: Sear
                 ))}
               </div>
             ) : (
-              <div className="text-center text-muted-foreground text-sm py-4">没有找到匹配的书签</div>
+              <div className="text-center text-muted-foreground text-sm py-4">{t('search.noResults')}</div>
             )}
           </CardContent>
         </Card>

@@ -1,15 +1,16 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { Download, Upload, FileText, Code } from "lucide-react"
+import { Download, Upload, FileText, Code, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import type { DashboardData } from "../app/page"
+import type { DashboardData, Bookmark } from "../app/page"
+import { useLanguage } from "@/lib/i18n/language-context"
+import { toast } from "@/components/ui/use-toast"
 
 interface ImportExportProps {
   data: DashboardData
@@ -23,12 +24,16 @@ interface ImportStatus {
 
 // 导入组件
 export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) => void }) {
+  const { t } = useLanguage();
   const [importText, setImportText] = useState("")
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null)
+  const [importMethod, setImportMethod] = useState<"file" | "paste" | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      setSelectedFile(file)
       const reader = new FileReader()
       reader.onload = (e) => {
         const content = e.target?.result as string
@@ -38,33 +43,44 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
     }
   }
 
+  const clearFileSelection = () => {
+    setSelectedFile(null)
+    setImportText("")
+    // 重置 input 的值，这样同一个文件可以再次选择
+    const fileInput = document.getElementById("file-input") as HTMLInputElement
+    if (fileInput) {
+      fileInput.value = ""
+    }
+  }
+
   const handleImportJSON = () => {
     try {
       const importedData = JSON.parse(importText)
 
       // Validate the data structure
       if (!importedData.groups || !Array.isArray(importedData.groups)) {
-        throw new Error("无效的数据格式：缺少 groups 数组")
+        throw new Error(t('import.errors.missingGroups'))
       }
 
       if (!importedData.standaloneBookmarks || !Array.isArray(importedData.standaloneBookmarks)) {
-        throw new Error("无效的数据格式：缺少 standaloneBookmarks 数组")
+        throw new Error(t('import.errors.missingBookmarks'))
       }
 
       // Basic validation for groups and bookmarks
       importedData.groups.forEach((group: any, index: number) => {
         if (!group.id || !group.name || !Array.isArray(group.bookmarks)) {
-          throw new Error(`分组 ${index + 1} 数据格式错误`)
+          throw new Error(t('import.errors.invalidGroup', { index: (index + 1).toString() }))
         }
       })
 
       onImport(importedData)
       setImportText("")
-      setImportStatus({ type: "success", message: "数据导入成功！" })
+      setImportStatus({ type: "success", message: t('import.success') })
+      setImportMethod(null)
     } catch (error) {
       setImportStatus({
         type: "error",
-        message: `导入失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        message: `${t('import.errors.failed')}: ${error instanceof Error ? error.message : t('common.unknownError')}`,
       })
     }
   }
@@ -100,11 +116,11 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
           
           if (h3 && subDl) {
             // This is a folder
-            const folderResult = processFolder(subDl, h3.textContent || '新分组')
+            const folderResult = processFolder(subDl, h3.textContent || t('import.newGroup'))
             if (folderResult.bookmarks.length > 0) {
               groups.push({
                 id: generateId(),
-                name: h3.textContent || '新分组',
+                name: h3.textContent || t('import.newGroup'),
                 bookmarks: folderResult.bookmarks
               })
             }
@@ -114,7 +130,7 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
             // This is a bookmark
             bookmarks.push({
               id: generateId(),
-              name: a.textContent || a.getAttribute("href") || "未命名书签",
+              name: a.textContent || a.getAttribute("href") || t('import.untitledBookmark'),
               url: a.getAttribute("href") || "",
               favicon: getFavicon(a.getAttribute("href") || "")
             })
@@ -132,7 +148,7 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
       const links = doc.querySelectorAll('a[href]')
       const bookmarks = Array.from(links).map(link => ({
         id: generateId(),
-        name: link.textContent || link.getAttribute("href") || "未命名书签",
+        name: link.textContent || link.getAttribute("href") || t('import.untitledBookmark'),
         url: link.getAttribute("href") || "",
         favicon: getFavicon(link.getAttribute("href") || "")
       }))
@@ -141,7 +157,7 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
       return {
         groups: bookmarks.length > 0 ? [{
           id: generateId(),
-          name: "导入的书签",
+          name: t('import.importedBookmarks'),
           bookmarks
         }] : [],
         standaloneBookmarks: []
@@ -165,128 +181,172 @@ export function ImportBookmarks({ onImport }: { onImport: (data: DashboardData) 
         const parsedData = parseBookmarksHTML(importText)
         onImport(parsedData)
         setImportText("")
-        setImportStatus({ type: "success", message: "浏览器书签导入成功！" })
+        setImportStatus({ type: "success", message: t('import.browserSuccess') })
+        setImportMethod(null)
       } else {
         handleImportJSON()
       }
     } catch (error) {
       setImportStatus({
         type: "error",
-        message: `导入失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        message: `${t('import.errors.failed')}: ${error instanceof Error ? error.message : t('common.unknownError')}`,
       })
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="import-file">从文件导入</Label>
-        <input
-          id="import-file"
-          type="file"
-          accept=".json,.html,.htm"
-          onChange={handleFileImport}
-          className="mt-2 block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="import-text">或粘贴数据</Label>
-        <Textarea
-          id="import-text"
-          placeholder="粘贴 JSON 数据或浏览器导出的 HTML 书签..."
-          value={importText}
-          onChange={(e) => setImportText(e.target.value)}
-          className="mt-2 min-h-[120px]"
-        />
-      </div>
-
-      <Button onClick={handleBrowserBookmarksImport} disabled={!importText.trim()} className="w-full">
-        导入数据
-      </Button>
-
-      {importStatus && (
-        <Alert variant={importStatus.type === "error" ? "destructive" : "default"}>
-          <AlertDescription>{importStatus.message}</AlertDescription>
-        </Alert>
+    <div className="space-y-6">
+      {/* Import Method Selection */}
+      {!importMethod && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => setImportMethod("file")}>
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <FileText className="w-8 h-8 text-primary" />
+                <h3 className="font-medium">{t('import.fromFile.title')}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {t('import.fromFile.description')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => setImportMethod("paste")}>
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <Code className="w-8 h-8 text-primary" />
+                <h3 className="font-medium">{t('import.fromPaste.title')}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {t('import.fromPaste.description')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      <div className="text-sm text-muted-foreground space-y-2">
-        <p>
-          <strong>支持的格式:</strong>
-        </p>
-        <ul className="list-disc list-inside space-y-1 ml-4">
-          <li>浏览器导出的 HTML 书签文件</li>
-          <li>Smart Bookmark Manager JSON 备份文件</li>
-          <li>其他符合格式的 JSON 数据</li>
-        </ul>
-      </div>
+      {/* Import Interface */}
+      {importMethod && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>{t('import.title')}</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => {
+                setImportMethod(null)
+                setSelectedFile(null)
+                setImportText("")
+                setImportStatus(null)
+              }}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {importMethod === "file" ? (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="file-input">{t('import.fromFile.label')}</Label>
+                  <input
+                    type="file"
+                    id="file-input"
+                    accept=".html,.json"
+                    onChange={handleFileImport}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => document.getElementById("file-input")?.click()}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {t('import.fromFile.button')}
+                  </Button>
+                </div>
+
+                {selectedFile && (
+                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm truncate">{selectedFile.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={clearFileSelection}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="import-text">{t('import.fromPaste.label')}</Label>
+                <Textarea
+                  id="import-text"
+                  placeholder={t('import.fromPaste.placeholder')}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  className="min-h-[200px] font-mono text-sm"
+                />
+              </div>
+            )}
+
+            {(importText || selectedFile) && (
+              <Button className="w-full" onClick={handleBrowserBookmarksImport}>
+                {t('import.button')}
+              </Button>
+            )}
+
+            {importStatus && (
+              <Alert variant={importStatus.type === "error" ? "destructive" : "default"}>
+                <AlertDescription>{importStatus.message}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
 
-// 完整的导入导出组件
 export function ImportExport({ data, onImport }: ImportExportProps) {
+  const { t } = useLanguage();
+  
   const exportToHTML = () => {
-    let html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Bookmark Manager - 书签导出</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
-        .group { margin-bottom: 30px; }
-        .group h2 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .bookmark { margin: 8px 0; }
-        .bookmark a { text-decoration: none; color: #0066cc; }
-        .bookmark a:hover { text-decoration: underline; }
-        .standalone { margin-top: 40px; }
-    </style>
-</head>
-<body>
-    <h1>Smart Bookmark Manager 书签</h1>
-    <p>导出时间: ${new Date().toLocaleString("zh-CN")}</p>
-`
+    let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>${t('export.title')}</TITLE>
+<H1>${t('export.title')}</H1>
+<DL><p>\n`
 
-    // Export groups
-    data.groups.forEach((group) => {
-      html += `    <div class="group">
-        <h2>${group.name}</h2>
-`
-      group.bookmarks.forEach((bookmark) => {
-        html += `        <div class="bookmark">
-            <a href="${bookmark.url}" target="_blank">${bookmark.name}</a>
-        </div>
-`
+    // Add groups
+    data.groups.forEach(group => {
+      html += `  <DT><H3>${group.name}</H3>\n  <DL><p>\n`
+      group.bookmarks.forEach(bookmark => {
+        html += `    <DT><A HREF="${bookmark.url}">${bookmark.name}</A>\n`
       })
-      html += `    </div>
-`
+      html += '  </DL><p>\n'
     })
 
-    // Export standalone bookmarks
+    // Add standalone bookmarks
     if (data.standaloneBookmarks.length > 0) {
-      html += `    <div class="standalone">
-        <h2>独立书签</h2>
-`
-      data.standaloneBookmarks.forEach((bookmark) => {
-        html += `        <div class="bookmark">
-            <a href="${bookmark.url}" target="_blank">${bookmark.name}</a>
-        </div>
-`
+      html += `  <DT><H3>${t('export.standaloneGroup')}</H3>\n  <DL><p>\n`
+      data.standaloneBookmarks.forEach(bookmark => {
+        html += `    <DT><A HREF="${bookmark.url}">${bookmark.name}</A>\n`
       })
-      html += `    </div>
-`
+      html += '  </DL><p>\n'
     }
 
-    html += `</body>
-</html>`
+    html += '</DL><p>'
 
-    const blob = new Blob([html], { type: "text/html" })
+    const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
+    const a = document.createElement('a')
     a.href = url
-    a.download = `my-dashboard-bookmarks-${new Date().toISOString().split("T")[0]}.html`
+    a.download = `bookmarks-${new Date().toISOString().split('T')[0]}.html`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -294,12 +354,12 @@ export function ImportExport({ data, onImport }: ImportExportProps) {
   }
 
   const exportToJSON = () => {
-    const json = JSON.stringify(data, null, 2)
-    const blob = new Blob([json], { type: "application/json" })
+    const dataStr = JSON.stringify(data, null, 2)
+    const blob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
+    const a = document.createElement('a')
     a.href = url
-    a.download = `my-dashboard-data-${new Date().toISOString().split("T")[0]}.json`
+    a.download = `bookmarks-${new Date().toISOString().split('T')[0]}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -307,42 +367,148 @@ export function ImportExport({ data, onImport }: ImportExportProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Export */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Download className="w-4 h-4" />
-            导出数据
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Button onClick={exportToJSON} className="justify-start">
-              <Code className="w-4 h-4 mr-2" />
-              导出为 JSON
-            </Button>
-            <Button onClick={exportToHTML} variant="outline" className="justify-start bg-transparent">
-              <FileText className="w-4 h-4 mr-2" />
-              导出为 HTML
-            </Button>
+    <div className="space-y-8">
+      {/* Export Section */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">{t('export.title')}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={exportToJSON}>
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <Download className="w-8 h-8 text-primary" />
+                <h3 className="font-medium">{t('export.toJSON.title')}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {t('export.toJSON.description')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={exportToHTML}>
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center space-y-2">
+                <Download className="w-8 h-8 text-primary" />
+                <h3 className="font-medium">{t('export.toHTML.title')}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {t('export.toHTML.description')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Import Section */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">{t('import.title')}</h2>
+        <ImportBookmarks onImport={onImport} />
+      </div>
+    </div>
+  )
+}
+
+// 生成HTML格式的书签
+function generateBookmarksHTML(data: { bookmarks: Bookmark[] }): string {
+  const generateBookmarkHTML = (bookmark: Bookmark): string => {
+    return `    <DT><A HREF="${bookmark.url}" ADD_DATE="${Math.floor(Date.now() / 1000)}">${bookmark.name}</A>\n`
+  }
+
+  const header = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>\n`
+
+  const footer = "</DL><p>\n"
+
+  const bookmarksHTML = data.bookmarks.map(generateBookmarkHTML).join("")
+  return header + bookmarksHTML + footer
+}
+
+// 导出组件
+export function ExportBookmarks({ data }: { data: DashboardData }) {
+  const { t } = useLanguage();
+
+  const handleExportJSON = () => {
+    // 检查书签数量
+    const standaloneCount = data.standaloneBookmarks?.length || 0;
+    const groupBookmarksCount = data.groups?.reduce((sum, group) => sum + (group.bookmarks?.length || 0), 0) || 0;
+    const totalBookmarks = standaloneCount + groupBookmarksCount;
+
+    if (totalBookmarks === 0) {
+      toast({
+        title: t('export.noBookmarks.title'),
+        description: t('export.noBookmarks.description'),
+        variant: "destructive",
+      })
+      return
+    }
+
+    const jsonString = JSON.stringify(data, null, 2)
+    const blob = new Blob([jsonString], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "bookmarks.json"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportHTML = () => {
+    // 检查书签数量并收集所有书签
+    const standaloneBookmarks = data.standaloneBookmarks || [];
+    const groupBookmarks = data.groups?.reduce((acc, group) => [...acc, ...(group.bookmarks || [])], [] as Bookmark[]) || [];
+    const allBookmarks = [...standaloneBookmarks, ...groupBookmarks];
+
+    if (allBookmarks.length === 0) {
+      toast({
+        title: t('export.noBookmarks.title'),
+        description: t('export.noBookmarks.description'),
+        variant: "destructive",
+      })
+      return
+    }
+
+    const htmlContent = generateBookmarksHTML({ bookmarks: allBookmarks })
+    const blob = new Blob([htmlContent], { type: "text/html" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "bookmarks.html"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card className="cursor-pointer hover:border-primary transition-colors" onClick={handleExportJSON}>
+        <CardContent className="p-6">
+          <div className="flex flex-col items-center text-center space-y-2">
+            <Download className="w-8 h-8 text-primary" />
+            <h3 className="font-medium">{t('export.toJSON.title')}</h3>
+            <p className="text-sm text-muted-foreground">
+              {t('export.toJSON.description')}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            JSON 格式可用于完整备份和恢复，HTML 格式适合在浏览器中查看书签。
-          </p>
         </CardContent>
       </Card>
 
-      {/* Import */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="w-4 h-4" />
-            导入数据
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ImportBookmarks onImport={onImport} />
+      <Card className="cursor-pointer hover:border-primary transition-colors" onClick={handleExportHTML}>
+        <CardContent className="p-6">
+          <div className="flex flex-col items-center text-center space-y-2">
+            <Download className="w-8 h-8 text-primary" />
+            <h3 className="font-medium">{t('export.toHTML.title')}</h3>
+            <p className="text-sm text-muted-foreground">
+              {t('export.toHTML.description')}
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

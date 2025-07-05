@@ -1,22 +1,14 @@
-import { Plus, Settings, FileJson, Upload, Download } from "lucide-react"
+import { Plus, Settings, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { useLanguage } from "@/lib/i18n/language-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ThemeSettings } from "./theme-settings"
 import { useRouter, usePathname } from "next/navigation"
 import { useState } from "react"
-import { SearchBar } from "./search-bar"
 import { Bookmark, Group } from "@/app/page"
 
 interface NavbarProps {
-  showSearch?: boolean;
   onAddBookmark?: () => void;
   onAddGroup?: () => void;
   data?: {
@@ -27,7 +19,6 @@ interface NavbarProps {
 }
 
 export function Navbar({ 
-  showSearch = false, 
   onAddBookmark, 
   onAddGroup, 
   data,
@@ -48,7 +39,8 @@ export function Navbar({
     <header className="border-b bg-card/90 backdrop-blur-sm sticky top-0 z-30">
       <div className="container mx-auto px-4 py-3">
         {/* Top row with logo and actions */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
+          {/* Logo and title */}
           <div 
             className="flex items-center gap-2 cursor-pointer"
             onClick={handleLogoClick}
@@ -58,10 +50,10 @@ export function Navbar({
             </div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold whitespace-nowrap">{t('app.title')}</h1>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">{t('app.subtitle')}</span>
             </div>
           </div>
 
+          {/* Actions group */}
           <div className="flex items-center gap-2">
             {isHomePage && (
               <>
@@ -88,22 +80,13 @@ export function Navbar({
 
             <LanguageSwitcher />
 
-            <Button variant="ghost" size="sm" onClick={() => setIsSettingsOpen(true)}>
-              <Settings className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-2 ml-2 pl-2 border-l">
+              <Button variant="ghost" size="sm" onClick={() => setIsSettingsOpen(true)}>
+                <Settings className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
-
-        {/* Bottom row with search */}
-        {showSearch && data && (
-          <div className="flex justify-center">
-            <SearchBar
-              groups={data.groups}
-              standaloneBookmarks={data.standaloneBookmarks}
-              onBookmarkClick={(bookmark: Bookmark) => onBookmarkClick?.(bookmark)}
-            />
-          </div>
-        )}
       </div>
 
       {/* Settings Dialog */}

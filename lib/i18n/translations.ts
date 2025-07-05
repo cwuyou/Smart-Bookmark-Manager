@@ -33,6 +33,8 @@ export const translations = {
       edit: 'Edit',
       move: 'Move',
       confirm: 'Confirm',
+      selectAll: 'Select All',
+      deselectAll: 'Deselect All',
     },
     empty: {
       title: 'Start Building Your Personal Navigation',
@@ -55,6 +57,8 @@ export const translations = {
         url: 'URL',
         name: 'Name (Optional)',
         namePlaceholder: 'Leave blank to auto-fetch page title',
+        group: 'Group (Optional)',
+        selectGroup: 'Select a group or leave empty for standalone',
       },
       editBookmark: {
         title: 'Edit Bookmark',
@@ -169,6 +173,13 @@ export const translations = {
     dragAndDrop: {
       moveToStandalone: 'Release to move to Standalone Bookmarks',
     },
+    batchMove: {
+      title: 'Batch Move Bookmarks',
+      targetGroup: 'Target Group',
+      selectGroup: 'Select a group',
+      selectedBookmarks: 'Selected Bookmarks',
+      emptyGroup: 'No bookmarks in this group to move',
+    },
   },
   zh: {
     app: {
@@ -202,6 +213,8 @@ export const translations = {
       edit: '编辑',
       move: '移动',
       confirm: '确定',
+      selectAll: '全选',
+      deselectAll: '反选',
     },
     empty: {
       title: '开始构建您的专属导航',
@@ -224,6 +237,8 @@ export const translations = {
         url: '网址 (URL)',
         name: '名称 (可选)',
         namePlaceholder: '留空将自动获取网页标题',
+        group: '分组 (可选)',
+        selectGroup: '选择一个分组或留空作为独立书签',
       },
       editBookmark: {
         title: '编辑书签',
@@ -337,6 +352,13 @@ export const translations = {
     },
     dragAndDrop: {
       moveToStandalone: '释放以移动到独立书签',
+    },
+    batchMove: {
+      title: '批量移动书签',
+      targetGroup: '目标分组',
+      selectGroup: '选择一个分组',
+      selectedBookmarks: '已选择的书签',
+      emptyGroup: '该分组下没有书签可移动',
     },
   },
 } as const; 

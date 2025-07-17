@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中间位置拖拽调试工具 - 完全修复版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            min-height: 400px;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        
+        .card {
+            background: #fff;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: grab;
+            transition: all 0.2s ease;
+            position: relative;
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            border-color: #3b82f6;
+        }
+        
+        .card.dragging {
+            opacity: 0.6;
+            transform: rotate(3deg) scale(1.02);
+            z-index: 1000;
+            border-color: #3b82f6;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        
+        .card.drag-over {
+            border-color: #10b981 !important;
+            background: #f0fdf4 !important;
+            transform: scale(1.05) !important;
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .drag-handle {
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(45deg, #666 25%, transparent 25%), 
+                        linear-gradient(-45deg, #666 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #666 75%), 
+                        linear-gradient(-45deg, transparent 75%, #666 75%);
+            background-size: 4px 4px;
+            background-position: 0 0, 0 2px, 2px -2px, -2px 0px;
+            cursor: grab;
+            border-radius: 2px;
+        }
+        
+        .card-title {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .card-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            color: #666;
+        }
+        
+        .position-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #3b82f6;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .row-indicator {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: #10b981;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+        }
+        
+        .middle-indicator {
+            background: #f59e0b !important;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1f2937;
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 2000;
+        }
+        
+        .debug-panel h4 {
+            margin: 0 0 8px 0;
+            color: #60a5fa;
+        }
+        
+        .debug-line {
+            margin: 4px 0;
+            padding: 2px 0;
+        }
+        
+        .success {
+            color: #10b981;
+        }
+        
+        .error {
+            color: #ef4444;
+        }
+        
+        .warning {
+            color: #f59e0b;
+        }
+        
+        .instructions {
+            margin-top: 20px;
+            padding: 16px;
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+        }
+        
+        .test-results {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        @media (max-width: 768px) {
+            .grid-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 中间位置拖拽调试工具 - 完全修复版</h1>
+        <p>专门用于测试和调试中间位置卡片无法替换的问题</p>
+        
+        <div class="grid-container" id="gridContainer">
+            <!-- 卡片将通过JavaScript动态生成 -->
+        </div>
+        
+        <div class="debug-panel" id="debugPanel">
+            <h4>🔍 拖拽调试信息</h4>
+            <div class="debug-line">状态: <span id="dragStatus">等待拖拽</span></div>
+            <div class="debug-line">源位置: <span id="sourcePos">-</span></div>
+            <div class="debug-line">目标位置: <span id="targetPos">-</span></div>
+            <div class="debug-line">鼠标坐标: <span id="mousePos">-</span></div>
+            <div class="debug-line">拖拽结果: <span id="dragResult">-</span></div>
+        </div>
+        
+        <div class="instructions">
+            <h3>🧪 测试说明</h3>
+            <ul>
+                <li><strong>重点测试</strong>：尝试将任意卡片拖拽到中间位置（位置 1, 4, 7）</li>
+                <li><strong>观察现象</strong>：是否能成功放置到中间位置，还是会跳到其他位置</li>
+                <li><strong>视觉反馈</strong>：拖拽时目标卡片会变绿并放大</li>
+                <li><strong>调试信息</strong>：右上角实时显示拖拽状态和坐标信息</li>
+                <li><strong>实际替换</strong>：成功拖拽后，卡片位置会实际发生变化</li>
+            </ul>
+        </div>
+        
+        <div class="test-results" id="testResults">
+            <h3>📊 测试结果</h3>
+            <div id="resultsList">
+                <p>开始拖拽测试，结果将显示在这里...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 卡片数据
+        let cards = [
+            { id: 0, title: 'Group 1', content: '第一行第一个', row: 1, col: 1 },
+            { id: 1, title: 'Group 2', content: '第一行中间位置', row: 1, col: 2, isMiddle: true },
+            { id: 2, title: 'Group 3', content: '第一行第三个', row: 1, col: 3 },
+            { id: 3, title: 'Group 4', content: '第二行第一个', row: 2, col: 1 },
+            { id: 4, title: 'Group 5', content: '第二行中间位置', row: 2, col: 2, isMiddle: true },
+            { id: 5, title: 'Group 6', content: '第二行第三个', row: 2, col: 3 },
+            { id: 6, title: 'Group 7', content: '第三行第一个', row: 3, col: 1 },
+            { id: 7, title: 'Group 8', content: '第三行中间位置', row: 3, col: 2, isMiddle: true },
+            { id: 8, title: 'Group 9', content: '第三行第三个', row: 3, col: 3 }
+        ];
+        
+        let draggedIndex = null;
+        let testResults = [];
+        let dragCounter = 0;
+        
+        const debugStatus = document.getElementById('dragStatus');
+        const sourcePos = document.getElementById('sourcePos');
+        const targetPos = document.getElementById('targetPos');
+        const mousePos = document.getElementById('mousePos');
+        const dragResult = document.getElementById('dragResult');
+        const resultsList = document.getElementById('resultsList');
+        const gridContainer = document.getElementById('gridContainer');
+        
+        function updateDebug(status, source = '-', target = '-', mouse = '-', result = '-') {
+            debugStatus.textContent = status;
+            sourcePos.textContent = source;
+            targetPos.textContent = target;
+            mousePos.textContent = mouse;
+            dragResult.textContent = result;
+        }
+        
+        function addTestResult(source, target, success, note = '') {
+            const timestamp = new Date().toLocaleTimeString();
+            testResults.push({
+                time: timestamp,
+                source: source,
+                target: target,
+                success: success,
+                note: note
+            });
+            
+            updateResultsDisplay();
+        }
+        
+        function updateResultsDisplay() {
+            const html = testResults.map(result => {
+                const statusClass = result.success ? 'success' : 'error';
+                const statusIcon = result.success ? '✅' : '❌';
+                return `
+                    <div class="debug-line ${statusClass}">
+                        ${statusIcon} ${result.time} - 位置 ${result.source} → 位置 ${result.target} 
+                        ${result.note ? `(${result.note})` : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            resultsList.innerHTML = html || '<p>暂无测试结果</p>';
+        }
+        
+        function renderCards() {
+            gridContainer.innerHTML = '';
+            
+            cards.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card';
+                cardElement.draggable = true;
+                cardElement.dataset.index = index;
+                
+                cardElement.innerHTML = `
+                    <div class="position-badge ${card.isMiddle ? 'middle-indicator' : ''}">${card.id}</div>
+                    <div class="row-indicator">第${card.row}行</div>
+                    <div class="card-header">
+                        <div class="drag-handle"></div>
+                        <div class="card-title">${card.title}</div>
+                    </div>
+                    <div class="card-content">
+                        <strong>${card.content}</strong>
+                        <small>${card.isMiddle ? '⚠️ 问题位置' : '尝试拖拽到中间位置'}</small>
+                    </div>
+                `;
+                
+                // 添加拖拽事件 - 使用更简单的方法
+                cardElement.addEventListener('dragstart', (e) => {
+                    draggedIndex = parseInt(e.target.dataset.index);
+                    e.target.classList.add('dragging');
+                    updateDebug('开始拖拽', draggedIndex);
+                    e.dataTransfer.setData('text/plain', draggedIndex.toString());
+                    e.dataTransfer.effectAllowed = 'move';
+                    dragCounter++;
+                });
+                
+                cardElement.addEventListener('dragend', (e) => {
+                    e.target.classList.remove('dragging');
+                    // 清除所有拖拽样式
+                    document.querySelectorAll('.card').forEach(card => {
+                        card.classList.remove('drag-over');
+                    });
+                    updateDebug('拖拽结束');
+                    draggedIndex = null;
+                });
+                
+                cardElement.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    const targetIndex = parseInt(e.target.closest('.card').dataset.index);
+                    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+                        e.target.closest('.card').classList.add('drag-over');
+                    }
+                });
+                
+                cardElement.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    
+                    const targetIndex = parseInt(e.target.closest('.card').dataset.index);
+                    updateDebug('拖拽中', draggedIndex, targetIndex, `${e.clientX}, ${e.clientY}`);
+                });
+                
+                cardElement.addEventListener('dragleave', (e) => {
+                    // 简化的 dragleave 处理
+                    if (!e.target.closest('.card').contains(e.relatedTarget)) {
+                        e.target.closest('.card').classList.remove('drag-over');
+                    }
+                });
+                
+                cardElement.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const targetElement = e.target.closest('.card');
+                    const targetIndex = parseInt(targetElement.dataset.index);
+                    const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                    
+                    targetElement.classList.remove('drag-over');
+                    
+                    if (sourceIndex !== targetIndex) {
+                        // 执行实际的卡片交换
+                        const temp = cards[sourceIndex];
+                        cards[sourceIndex] = cards[targetIndex];
+                        cards[targetIndex] = temp;
+                        
+                        // 重新渲染卡片
+                        renderCards();
+                        
+                        const wasMiddlePosition = [1, 4, 7].includes(targetIndex);
+                        const success = true;
+                        
+                        let note = '';
+                        if (wasMiddlePosition) {
+                            note = '中间位置测试 - 成功替换!';
+                        } else {
+                            note = '普通位置替换';
+                        }
+                        
+                        addTestResult(sourceIndex, targetIndex, success, note);
+                        updateDebug('拖拽成功', sourceIndex, targetIndex, '-', '成功替换');
+                        
+                        console.log(`拖拽成功: 位置 ${sourceIndex} 和位置 ${targetIndex} 已交换`);
+                        
+                    } else {
+                        updateDebug('拖拽取消', sourceIndex, targetIndex, '-', '相同位置');
+                    }
+                });
+                
+                gridContainer.appendChild(cardElement);
+            });
+        }
+        
+        // 全局鼠标移动事件
+        document.addEventListener('mousemove', (e) => {
+            if (draggedIndex !== null) {
+                mousePos.textContent = `${e.clientX}, ${e.clientY}`;
+            }
+        });
+        
+        // 防止页面默认的拖拽行为
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+        });
+        
+        // 初始化
+        renderCards();
+        updateDebug('就绪');
+        console.log('中间位置拖拽调试工具已加载');
+        console.log('中间位置索引: 1, 4, 7');
+        console.log('拖拽任意卡片到任意位置进行测试');
+    </script>
+</body>
+</html>

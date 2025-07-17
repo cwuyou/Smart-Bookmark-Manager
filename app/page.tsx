@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 import { useState, useEffect } from "react"
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DraggableProvided, DroppableStateSnapshot, DraggableStateSnapshot, DropResult } from "@hello-pangea/dnd"
+import CustomDragDrop from "@/components/custom-drag-drop"
 import { Plus, Settings, Edit2, Trash2, GripVertical, FileJson, Upload, Download, FolderInput } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -341,6 +342,14 @@ const DashboardContent: React.FC = () => {
       return
     }
 
+    // 如果拖拽到相同位置，不做任何操作
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return
+    }
+
     if (type === "group") {
       const newGroups = Array.from(data.groups)
       const [reorderedGroup] = newGroups.splice(source.index, 1)
@@ -366,37 +375,64 @@ const DashboardContent: React.FC = () => {
     setData((prev) => {
       const newData = { ...prev }
 
-      // Remove from source
-      if (sourceGroupId) {
-        newData.groups = newData.groups.map((group) =>
-          group.id === sourceGroupId
-            ? { ...group, bookmarks: group.bookmarks.filter((b) => b.id !== bookmark.id) }
-            : group,
-        )
+      // 如果是同一个分组内的移动，使用更精确的数组操作
+      if (sourceGroupId === destGroupId && sourceGroupId) {
+        newData.groups = newData.groups.map((group) => {
+          if (group.id === sourceGroupId) {
+            const newBookmarks = Array.from(group.bookmarks)
+            // 移除源位置的书签
+            const [movedBookmark] = newBookmarks.splice(source.index, 1)
+            // 插入到目标位置
+            newBookmarks.splice(destination.index, 0, movedBookmark)
+            return { ...group, bookmarks: newBookmarks }
+          }
+          return group
+        })
+      } else if (sourceGroupId === destGroupId && !sourceGroupId) {
+        // 独立书签内部移动
+        const newStandaloneBookmarks = Array.from(newData.standaloneBookmarks)
+        const [movedBookmark] = newStandaloneBookmarks.splice(source.index, 1)
+        newStandaloneBookmarks.splice(destination.index, 0, movedBookmark)
+        newData.standaloneBookmarks = newStandaloneBookmarks
       } else {
-        newData.standaloneBookmarks = newData.standaloneBookmarks.filter((b) => b.id !== bookmark.id)
-      }
+        // 跨分组移动
+        // Remove from source
+        if (sourceGroupId) {
+          newData.groups = newData.groups.map((group) =>
+            group.id === sourceGroupId
+              ? { 
+                  ...group, 
+                  bookmarks: group.bookmarks.filter((_, index) => index !== source.index)
+                }
+              : group,
+          )
+        } else {
+          newData.standaloneBookmarks = newData.standaloneBookmarks.filter(
+            (_, index) => index !== source.index
+          )
+        }
 
-      // Add to destination
-      if (destGroupId) {
-        newData.groups = newData.groups.map((group) =>
-          group.id === destGroupId
-            ? {
-                ...group,
-                bookmarks: [
-                  ...group.bookmarks.slice(0, destination.index),
-                  bookmark,
-                  ...group.bookmarks.slice(destination.index),
-                ],
-              }
-            : group,
-        )
-      } else {
-        newData.standaloneBookmarks = [
-          ...newData.standaloneBookmarks.slice(0, destination.index),
-          bookmark,
-          ...newData.standaloneBookmarks.slice(destination.index),
-        ]
+        // Add to destination
+        if (destGroupId) {
+          newData.groups = newData.groups.map((group) =>
+            group.id === destGroupId
+              ? {
+                  ...group,
+                  bookmarks: [
+                    ...group.bookmarks.slice(0, destination.index),
+                    bookmark,
+                    ...group.bookmarks.slice(destination.index),
+                  ],
+                }
+              : group,
+          )
+        } else {
+          newData.standaloneBookmarks = [
+            ...newData.standaloneBookmarks.slice(0, destination.index),
+            bookmark,
+            ...newData.standaloneBookmarks.slice(destination.index),
+          ]
+        }
       }
 
       return newData
@@ -618,177 +654,168 @@ const DashboardContent: React.FC = () => {
 
               <DragDropContext 
                 onDragEnd={onDragEnd}
+                onDragStart={(start) => {
+                  console.log('拖拽开始:', start)
+                }}
+                onDragUpdate={(update) => {
+                  console.log('拖拽更新:', update)
+                }}
               >
-                {/* Groups */}
-                <Droppable droppableId="groups" type="group" direction="horizontal">
-                  {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-                    >
-                      {data.groups.map((group, index) => (
-                        <Draggable key={group.id} draggableId={group.id} index={index}>
-                          {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
+                {/* Groups - 使用自定义拖拽组件 */}
+                <CustomDragDrop
+                  items={data.groups}
+                  onReorder={(newGroups) => setData(prev => ({ ...prev, groups: newGroups }))}
+                  cols={{ default: 1, md: 2, lg: 3 }}
+                  className="mb-8"
+                  renderItem={(group, index, isDragging) => (
+                    <Card className={cn({ "opacity-60": isDragging })}>
+                      <CardHeader className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="cursor-grab hover:bg-muted/50 p-1 rounded transition-colors">
+                            <GripVertical className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                          </div>
+                          {editingGroup === group.id ? (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault()
+                                updateGroupName(group.id, editingGroupName)
+                                setEditingGroup(null)
+                              }}
+                              className="flex-1"
                             >
-                              <Card>
-                                <CardHeader className="p-4">
-                                  <div className="flex items-center gap-2">
-                                    <div {...provided.dragHandleProps} className="cursor-grab">
-                                      <GripVertical className="w-4 h-4 text-muted-foreground" />
-                                    </div>
-                                    {editingGroup === group.id ? (
-                                      <form
-                                        onSubmit={(e) => {
-                                          e.preventDefault()
-                                          updateGroupName(group.id, editingGroupName)
-                                          setEditingGroup(null)
-                                        }}
-                                        className="flex-1"
-                                      >
-                                        <Input
-                                          value={editingGroupName}
-                                          onChange={(e) => setEditingGroupName(e.target.value)}
-                                          className="h-7"
-                                          autoFocus
-                                          onBlur={() => {
-                                            updateGroupName(group.id, editingGroupName)
-                                            setEditingGroup(null)
-                                          }}
-                                        />
-                                      </form>
-                                    ) : (
-                                      <div
-                                        className="flex-1 font-medium cursor-pointer hover:underline"
-                                        onClick={() => {
-                                          setEditingGroup(group.id)
-                                          setEditingGroupName(group.name)
-                                        }}
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <span>
-                                            {getGroupNameDisplay(group.name)}
-                                          </span>
-                                          <Badge variant="secondary" className="text-xs font-normal">
-                                            {group.bookmarks.length}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                    )}
-                                    <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => {
-                                          setBookmarkForm({ name: "", url: "", targetGroupId: group.id })
-                                          setIsAddBookmarkOpen(true)
-                                        }}
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => {
-                                          if (group.bookmarks.length === 0) {
-                                            // 使用 toast 提示
-                                            toast({
-                                              title: t('batchMove.title'),
-                                              description: t('batchMove.emptyGroup'),
-                                              variant: "default",
-                                            })
-                                            return;
-                                          }
-                                          setSelectedGroup(group)
-                                          setIsBatchMoveOpen(true)
-                                        }}
-                                      >
-                                        <FolderInput className="h-3 w-3" />
-                                      </Button>
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>{t('dialog.deleteGroup.title')}</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              {group.bookmarks.length > 0 
-                                                ? t('dialog.deleteGroup.description')
-                                                    .replace('{name}', group.name)
-                                                    .replace('{count}', String(group.bookmarks.length))
-                                                : t('dialog.deleteGroup.emptyDescription')
-                                                    .replace('{name}', group.name)
-                                              }
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                                            {group.bookmarks.length > 0 ? (
-                                              <>
-                                                <Button variant="outline" onClick={() => deleteGroup(group.id, true)}>
-                                                  {t('dialog.deleteGroup.moveToStandalone')}
-                                                </Button>
-                                                <AlertDialogAction onClick={() => deleteGroup(group.id, false)}>
-                                                  {t('dialog.deleteGroup.deleteAll')}
-                                                </AlertDialogAction>
-                                              </>
-                                            ) : (
-                                              <AlertDialogAction onClick={() => deleteGroup(group.id, false)}>
-                                                {t('common.delete')}
-                                              </AlertDialogAction>
-                                            )}
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    </div>
-                                  </div>
-                                </CardHeader>
-                                <CardContent>
-                                  <Droppable droppableId={group.id} type="bookmark">
-                                    {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.droppableProps}
-                                        className={cn(
-                                          "space-y-1 min-h-[60px] max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 scrollbar-track-transparent",
-                                          { "bg-muted/30 rounded-lg p-2": snapshot.isDraggingOver }
-                                        )}
-                                      >
-                                        {group.bookmarks.map((bookmark, index) => (
-                                          <BookmarkItem
-                                            key={bookmark.id}
-                                            bookmark={bookmark}
-                                            groupId={group.id}
-                                            index={index}
-                                          />
-                                        ))}
-                                        {provided.placeholder}
-                                        {group.bookmarks.length === 0 && (
-                                          <div className="text-center py-8 text-muted-foreground text-sm">
-                                            {t('group.emptyState')}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </Droppable>
-                                </CardContent>
-                              </Card>
+                              <Input
+                                value={editingGroupName}
+                                onChange={(e) => setEditingGroupName(e.target.value)}
+                                className="h-7"
+                                autoFocus
+                                onBlur={() => {
+                                  updateGroupName(group.id, editingGroupName)
+                                  setEditingGroup(null)
+                                }}
+                              />
+                            </form>
+                          ) : (
+                            <div
+                              className="flex-1 font-medium cursor-pointer hover:underline"
+                              onClick={() => {
+                                setEditingGroup(group.id)
+                                setEditingGroupName(group.name)
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>
+                                  {getGroupNameDisplay(group.name)}
+                                </span>
+                                <Badge variant="secondary" className="text-xs font-normal">
+                                  {group.bookmarks.length}
+                                </Badge>
+                              </div>
                             </div>
                           )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setBookmarkForm({ name: "", url: "", targetGroupId: group.id })
+                                setIsAddBookmarkOpen(true)
+                              }}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                if (group.bookmarks.length === 0) {
+                                  toast({
+                                    title: t('batchMove.title'),
+                                    description: t('batchMove.emptyGroup'),
+                                    variant: "default",
+                                  })
+                                  return;
+                                }
+                                setSelectedGroup(group)
+                                setIsBatchMoveOpen(true)
+                              }}
+                            >
+                              <FolderInput className="h-3 w-3" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>{t('dialog.deleteGroup.title')}</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {group.bookmarks.length > 0 
+                                      ? t('dialog.deleteGroup.description')
+                                          .replace('{name}', group.name)
+                                          .replace('{count}', String(group.bookmarks.length))
+                                      : t('dialog.deleteGroup.emptyDescription')
+                                          .replace('{name}', group.name)
+                                    }
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                  <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                                  {group.bookmarks.length > 0 ? (
+                                    <>
+                                      <Button variant="outline" onClick={() => deleteGroup(group.id, true)}>
+                                        {t('dialog.deleteGroup.moveToStandalone')}
+                                      </Button>
+                                      <AlertDialogAction onClick={() => deleteGroup(group.id, false)}>
+                                        {t('dialog.deleteGroup.deleteAll')}
+                                      </AlertDialogAction>
+                                    </>
+                                  ) : (
+                                    <AlertDialogAction onClick={() => deleteGroup(group.id, false)}>
+                                      {t('common.delete')}
+                                    </AlertDialogAction>
+                                  )}
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <Droppable droppableId={group.id} type="bookmark">
+                          {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.droppableProps}
+                              className={cn(
+                                "space-y-1 min-h-[60px] max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 scrollbar-track-transparent",
+                                { "bg-muted/30 rounded-lg p-2": snapshot.isDraggingOver }
+                              )}
+                            >
+                              {group.bookmarks.map((bookmark, index) => (
+                                <BookmarkItem
+                                  key={bookmark.id}
+                                  bookmark={bookmark}
+                                  groupId={group.id}
+                                  index={index}
+                                />
+                              ))}
+                              {provided.placeholder}
+                              {group.bookmarks.length === 0 && (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                  {t('group.emptyState')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Droppable>
+                      </CardContent>
+                    </Card>
                   )}
-                </Droppable>
+                />
 
                 {/* Standalone Bookmarks */}
                 <Card>

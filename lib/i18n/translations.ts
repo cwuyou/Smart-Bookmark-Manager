@@ -172,6 +172,7 @@ export const translations = {
     },
     dragAndDrop: {
       moveToStandalone: 'Release to move to Standalone Bookmarks',
+      dragToReorder: 'Drag to reorder groups',
     },
     batchMove: {
       title: 'Batch Move Bookmarks',
@@ -352,6 +353,7 @@ export const translations = {
     },
     dragAndDrop: {
       moveToStandalone: '释放以移动到独立书签',
+      dragToReorder: '拖拽以重新排列分组',
     },
     batchMove: {
       title: '批量移动书签',

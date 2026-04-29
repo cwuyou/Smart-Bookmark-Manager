@@ -267,6 +267,20 @@ input:focus, textarea:focus {
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
+/* 书签拖拽预览样式 */
+.bookmark-drag-preview {
+  position: absolute !important;
+  top: -1000px !important;
+  left: -1000px !important;
+  transform: rotate(2deg) scale(0.9) !important;
+  opacity: 0.8 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 8px !important;
+  border: 1px solid #3b82f6 !important;
+  max-width: 300px !important;
+  background-color: white !important;
+}
+
 /* 添加毛玻璃效果 */
 .glass {
   background: rgba(255, 255, 255, 0.7);

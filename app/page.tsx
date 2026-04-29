@@ -6,7 +6,7 @@ import { LanguageSwitcher } from "@/components/language-switcher"
 import { useLanguage } from "@/lib/i18n/language-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DraggableProvided, DroppableStateSnapshot, DraggableStateSnapshot, DropResult } from "@hello-pangea/dnd"
 import CustomDragDrop from "@/components/custom-drag-drop"
 import { Plus, Settings, Edit2, Trash2, GripVertical, FileJson, Upload, Download, FolderInput } from "lucide-react"
@@ -444,6 +444,27 @@ const DashboardContent: React.FC = () => {
   }
 
   const BookmarkItem = ({ bookmark, groupId, index }: { bookmark: Bookmark; groupId?: string; index: number }) => {
+    const dragImageRef = useRef<HTMLElement | null>(null)
+
+    const handleDragStart = (e: React.DragEvent) => {
+      if (!e.dataTransfer) return
+
+      const dragImage = e.currentTarget.cloneNode(true) as HTMLElement
+      dragImage.classList.add("bookmark-drag-preview")
+      document.body.appendChild(dragImage)
+      dragImageRef.current = dragImage
+
+      const rect = e.currentTarget.getBoundingClientRect()
+      e.dataTransfer.setDragImage(dragImage, e.clientX - rect.left, e.clientY - rect.top)
+    }
+
+    const handleDragEnd = () => {
+      if (dragImageRef.current) {
+        dragImageRef.current.remove()
+        dragImageRef.current = null
+      }
+    }
+
     return (
       <Draggable draggableId={bookmark.id} index={index}>
         {(provided: DraggableProvided, snapshot: DraggableStateSnapshot) => (
@@ -455,7 +476,9 @@ const DashboardContent: React.FC = () => {
               "group flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors",
               { "bg-muted/50": snapshot.isDragging }
             )}
-            onClick={() => window.open(bookmark.url, "_blank")}
+            onClick={() => handleBookmarkClick(bookmark)}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
           >
             <img
               src={bookmark.favicon || "/placeholder.svg?height=20&width=20"}
@@ -671,9 +694,18 @@ const DashboardContent: React.FC = () => {
                     <Card className={cn({ "opacity-60": isDragging })}>
                       <CardHeader className="p-4">
                         <div className="flex items-center gap-2">
-                          <div className="cursor-grab hover:bg-muted/50 p-1 rounded transition-colors">
-                            <GripVertical className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-grab hover:bg-muted/50 p-1 rounded transition-colors">
+                                  <GripVertical className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">
+                                <p>{t('dragAndDrop.dragToReorder')}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           {editingGroup === group.id ? (
                             <form
                               onSubmit={(e) => {
